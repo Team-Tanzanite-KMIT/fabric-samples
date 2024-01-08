@@ -104,7 +104,6 @@ export class AssetTransferContract extends Contract {
         if (!exists) {
             throw new Error(`The asset ${id} does not exist`);
         }
-
         // overwriting original asset with new asset
         const updatedAsset = {
             ID: id,
@@ -138,6 +137,8 @@ export class AssetTransferContract extends Contract {
     // TransferAsset updates the owner field of asset with given id in the world state, and returns the old owner.
     @Transaction()
     public async TransferAsset(ctx: Context, id: string, newOwner: string): Promise<string> {
+
+        
         const assetString = await this.ReadAsset(ctx, id);
         const asset = JSON.parse(assetString);
         const oldOwner = asset.Owner;

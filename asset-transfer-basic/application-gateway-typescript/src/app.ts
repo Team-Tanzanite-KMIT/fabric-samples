@@ -11,9 +11,16 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { TextDecoder } from 'util';
 
-const channelName = envOrDefault('CHANNEL_NAME', 'mychannel');
-const chaincodeName = envOrDefault('CHAINCODE_NAME', 'basic');
-const mspId = envOrDefault('MSP_ID', 'Org1MSP');
+import { Asset, FileParams } from './types';
+
+
+// const channelName = envOrDefault('CHANNEL_NAME', 'mychannel');
+// const chaincodeName = envOrDefault('CHAINCODE_NAME', 'filebasic');
+// const mspId = envOrDefault('MSP_ID', 'Org1MSP');
+
+const channelName = 'mychannel';
+const chaincodeName = 'filebasic';
+const mspId = 'Org1MSP';
 
 // Path to crypto materials.
 const cryptoPath = envOrDefault('CRYPTO_PATH', path.resolve(__dirname, '..', '..', '..', 'test-network', 'organizations', 'peerOrganizations', 'org1.example.com'));
@@ -27,6 +34,8 @@ const certPath = envOrDefault('CERT_PATH', path.resolve(cryptoPath, 'users', 'Us
 // Path to peer tls certificate.
 const tlsCertPath = envOrDefault('TLS_CERT_PATH', path.resolve(cryptoPath, 'peers', 'peer0.org1.example.com', 'tls', 'ca.crt'));
 
+console.log(`export CRYPTO_PATH=${cryptoPath}\nexport KEY_DIRECTORY_PATH=${keyDirectoryPath}\nexport CERT_PATH=${certPath}\nexport TLS_CERT_PATH=${tlsCertPath}`)
+
 // Gateway peer endpoint.
 const peerEndpoint = envOrDefault('PEER_ENDPOINT', 'localhost:7051');
 
@@ -34,7 +43,7 @@ const peerEndpoint = envOrDefault('PEER_ENDPOINT', 'localhost:7051');
 const peerHostAlias = envOrDefault('PEER_HOST_ALIAS', 'peer0.org1.example.com');
 
 const utf8Decoder = new TextDecoder();
-const assetId = `asset${Date.now()}`;
+const assetId = `Mathematics for Computer Science`;
 
 async function main(): Promise<void> {
 
@@ -73,19 +82,27 @@ async function main(): Promise<void> {
         await initLedger(contract);
 
         // Return all the current assets on the ledger.
-        await getAllAssets(contract);
-
+        await getAllFiles(contract);
+        
         // Create a new asset on the ledger.
-        await createAsset(contract);
+        await createFile(contract, {
+            content: "ss",
+            filename: "testfile.pdf",
+            owner: "newOwner"
+        });
+        
+        await getAllFiles(contract);
 
         // Update an existing asset asynchronously.
-        await transferAssetAsync(contract);
+        await transferFileAsync(contract, "ss", "nextowner");
+        
+        await getAllFiles(contract);
 
         // Get the asset details by assetID.
-        await readAssetByID(contract);
+        await readFileByID(contract, "ss");
 
-        // Update an asset which does not exist.
-        await updateNonExistentAsset(contract)
+        // // Update an asset which does not exist.
+        // await updateNonExistentAsset(contract)
     } finally {
         gateway.close();
         client.close();
@@ -133,10 +150,10 @@ async function initLedger(contract: Contract): Promise<void> {
 /**
  * Evaluate a transaction to query ledger state.
  */
-async function getAllAssets(contract: Contract): Promise<void> {
+async function getAllFiles(contract: Contract): Promise<void> {
     console.log('\n--> Evaluate Transaction: GetAllAssets, function returns all the current assets on the ledger');
 
-    const resultBytes = await contract.evaluateTransaction('GetAllAssets');
+    const resultBytes = await contract.evaluateTransaction('GetAllFiles');
 
     const resultJson = utf8Decoder.decode(resultBytes);
     const result = JSON.parse(resultJson);
@@ -146,34 +163,33 @@ async function getAllAssets(contract: Contract): Promise<void> {
 /**
  * Submit a transaction synchronously, blocking until it has been committed to the ledger.
  */
-async function createAsset(contract: Contract): Promise<void> {
-    console.log('\n--> Submit Transaction: CreateAsset, creates new asset with ID, Color, Size, Owner and AppraisedValue arguments');
+async function createFile(contract: Contract, file: FileParams ): Promise<void> {
+    console.log('\n--> Submit Transaction: Createfile, creates new file with ID, Color, Size, Owner and AppraisedValue arguments');
 
     await contract.submitTransaction(
-        'CreateAsset',
-        assetId,
-        'yellow',
-        '5',
-        'Tom',
-        '1300',
+        'CreateFile',
+        file.filename,
+        file.content,
+        file.owner
     );
 
     console.log('*** Transaction committed successfully');
+    
 }
 
 /**
  * Submit transaction asynchronously, allowing the application to process the smart contract response (e.g. update a UI)
  * while waiting for the commit notification.
  */
-async function transferAssetAsync(contract: Contract): Promise<void> {
+async function transferFileAsync(contract: Contract, id: string, newOwner: string ): Promise<void> {
     console.log('\n--> Async Submit Transaction: TransferAsset, updates existing asset owner');
 
-    const commit = await contract.submitAsync('TransferAsset', {
-        arguments: [assetId, 'Saptha'],
+    const commit = await contract.submitAsync('TransferFile', {
+        arguments: [id, newOwner],
     });
     const oldOwner = utf8Decoder.decode(commit.getResult());
 
-    console.log(`*** Successfully submitted transaction to transfer ownership from ${oldOwner} to Saptha`);
+    console.log(`*** Successfully submitted transaction to transfer ownership from ${oldOwner} to ${newOwner}`);
     console.log('*** Waiting for transaction commit');
 
     const status = await commit.getStatus();
@@ -184,14 +200,16 @@ async function transferAssetAsync(contract: Contract): Promise<void> {
     console.log('*** Transaction committed successfully');
 }
 
-async function readAssetByID(contract: Contract): Promise<void> {
+async function readFileByID(contract: Contract, id: string): Promise<Asset> {
     console.log('\n--> Evaluate Transaction: ReadAsset, function returns asset attributes');
 
-    const resultBytes = await contract.evaluateTransaction('ReadAsset', assetId);
+    const resultBytes = await contract.evaluateTransaction('ReadAsset', id);
 
     const resultJson = utf8Decoder.decode(resultBytes);
-    const result = JSON.parse(resultJson);
+    const result: Asset = JSON.parse(resultJson);
     console.log('*** Result:', result);
+
+    return  result
 }
 
 /**
